@@ -1,0 +1,6 @@
+streamlit 
+educhain 
+langchain-google-genai
+langchain_community
+matplotlib
+IPython
