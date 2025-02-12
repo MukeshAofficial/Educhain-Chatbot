@@ -48,7 +48,27 @@ mcq_params_schema = {
     'required': ['topic', 'num_questions']
 }
 
+short_answer_params_schema = {
+    'type': 'OBJECT',
+    'properties': {
+        'topic': topic_schema,
+        'num_questions': num_questions_schema,
+        'custom_instructions': custom_instructions_schema,
+    },
+    'required': ['topic', 'num_questions']
+}
+
 true_false_params_schema = {
+    'type': 'OBJECT',
+    'properties': {
+        'topic': topic_schema,
+        'num_questions': num_questions_schema,
+        'custom_instructions': custom_instructions_schema,
+    },
+    'required': ['topic', 'num_questions']
+}
+
+fill_blank_params_schema = {
     'type': 'OBJECT',
     'properties': {
         'topic': topic_schema,
@@ -76,9 +96,19 @@ function_declarations = [
         'parameters': mcq_params_schema,
     },
     {
+        'name': 'generate_short_answer',
+        'description': 'Generate short answer questions on a given topic.',
+        'parameters': short_answer_params_schema,
+    },
+    {
         'name': 'generate_true_false',
         'description': 'Generate true/false questions on a given topic.',
         'parameters': true_false_params_schema,
+    },
+    {
+        'name': 'generate_fill_blank',
+        'description': 'Generate fill in the blank questions on a given topic.',
+        'parameters': fill_blank_params_schema,
     },
     {
         'name': 'generate_form',  # New Function
@@ -244,6 +274,16 @@ def generate_mcq(qna_engine_instance, topic, num_questions, custom_instructions=
     )
     return questions
 
+def generate_short_answer(qna_engine_instance, topic, num_questions, custom_instructions=None):
+    """Generates and displays Short Answer Questions."""
+    st.info(f"Generating {num_questions} Short Answer Questions on topic: {topic}...")  # Added info message
+    questions = qna_engine_instance.generate_questions(
+        topic=topic,
+        num=num_questions,
+        question_type="Short Answer",
+        custom_instructions=custom_instructions
+    )
+    return questions
 
 def generate_true_false(qna_engine_instance, topic, num_questions, custom_instructions=None):
     """Generates and displays True/False Questions."""
@@ -252,6 +292,17 @@ def generate_true_false(qna_engine_instance, topic, num_questions, custom_instru
         topic=topic,
         num=num_questions,
         question_type="True/False",
+        custom_instructions=custom_instructions
+    )
+    return questions
+
+def generate_fill_blank(qna_engine_instance, topic, num_questions, custom_instructions=None):
+    """Generates and displays Fill in the Blank Questions."""
+    st.info(f"Generating {num_questions} Fill in the Blank Questions on topic: {topic}...")  # Added info message
+    questions = qna_engine_instance.generate_questions(
+        topic=topic,
+        num=num_questions,
+        question_type="Fill in the Blank",
         custom_instructions=custom_instructions
     )
     return questions
@@ -290,27 +341,15 @@ def display_questions(questions):
     if questions and hasattr(questions, "questions"):
         for i, question in enumerate(questions.questions):
             st.subheader(f"Question {i + 1}:")
-
-            if hasattr(question, 'options'):  # Multiple Choice
-                st.write(f"**Question:** {question.question}")
+            st.write(f"**Question:** {question.question}")
+            if hasattr(question, 'options'):
                 st.write("Options:")
                 for j, option in enumerate(question.options):
                     st.write(f"   {chr(65 + j)}. {option}")
                 if hasattr(question, 'answer'):
                     st.write(f"**Correct Answer:** {question.answer}")
-                if hasattr(question, 'explanation') and question.explanation:
-                    st.write(f"**Explanation:** {question.explanation}")
-
-            elif hasattr(question, 'answer'):  # True/False
-                st.write(f"**Question:** {question.question}")
-                st.write(f"**Answer:** {question.answer}")
-                if hasattr(question, 'explanation') and question.explanation:
-                    st.write(f"**Explanation:** {question.explanation}")
-            else:
-                st.write(f"**Question:** {question.question}")
-                if hasattr(question, 'explanation') and question.explanation:
-                    st.write(f"**Explanation:** {question.explanation}")
-
+            if hasattr(question, 'explanation') and question.explanation:
+                st.write(f"**Explanation:** {question.explanation}")
             st.markdown("---")
     else:
         st.error("No questions generated or invalid question format.")
@@ -318,7 +357,9 @@ def display_questions(questions):
 # --- Function Dispatcher ---
 function_map = {
     "generate_mcq": generate_mcq,
+    "generate_short_answer": generate_short_answer,
     "generate_true_false": generate_true_false,
+    "generate_fill_blank": generate_fill_blank,
     "generate_form": generate_form  # New Function
 }
 
@@ -415,9 +456,7 @@ def main():
                             if function_result: #Added. If not authenticated it shows a URL. If authenticated it will show form URL
                                 if "http" in function_result: #Added. Authentication or form url. If auth then:
                                     #st.markdown(f"Please authenticate with Google: {function_result}") #Added. #REMOVED THE TEXT. IT SHOWS FORM URL ONLY
-                                    st.markdown("")
-
-                                    display_questions(function_result)
+                                    st.markdown(f"Please authenticate with Google:  [Login to Google]({function_result})")
 
                                 else:
                                     st.markdown(f"Form URL: [Click here]({function_result})")#Added #if for is created it show this.
