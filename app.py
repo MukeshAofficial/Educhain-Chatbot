@@ -341,15 +341,29 @@ def display_questions(questions):
     if questions and hasattr(questions, "questions"):
         for i, question in enumerate(questions.questions):
             st.subheader(f"Question {i + 1}:")
-            st.write(f"**Question:** {question.question}")
             if hasattr(question, 'options'):
+                st.write(f"**Question:** {question.question}")
                 st.write("Options:")
                 for j, option in enumerate(question.options):
                     st.write(f"   {chr(65 + j)}. {option}")
                 if hasattr(question, 'answer'):
                     st.write(f"**Correct Answer:** {question.answer}")
-            if hasattr(question, 'explanation') and question.explanation:
-                st.write(f"**Explanation:** {question.explanation}")
+                if hasattr(question, 'explanation') and question.explanation:
+                    st.write(f"**Explanation:** {question.explanation}")
+            elif hasattr(question, 'keywords'):
+                st.write(f"**Question:** {question.question}")
+                st.write(f"**Answer:** {question.answer}")
+                if question.keywords:
+                    st.write(f"**Keywords:** {', '.join(question.keywords)}")
+            elif hasattr(question, 'answer'):
+                st.write(f"**Question:** {question.question}")
+                st.write(f"**Answer:** {question.answer}")
+                if hasattr(question, 'explanation') and question.explanation:
+                    st.write(f"**Explanation:** {question.explanation}")
+            else:
+                st.write(f"**Question:** {question.question}")
+                if hasattr(question, 'explanation') and question.explanation:
+                    st.write(f"**Explanation:** {question.explanation}")
             st.markdown("---")
     else:
         st.error("No questions generated or invalid question format.")
@@ -457,6 +471,8 @@ def main():
                                 if "http" in function_result: #Added. Authentication or form url. If auth then:
                                     #st.markdown(f"Please authenticate with Google: {function_result}") #Added. #REMOVED THE TEXT. IT SHOWS FORM URL ONLY
                                     st.markdown("")
+
+                                    display_questions(function_result)
 
                                 else:
                                     st.markdown(f"Form URL: [Click here]({function_result})")#Added #if for is created it show this.
