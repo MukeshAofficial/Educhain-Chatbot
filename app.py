@@ -223,7 +223,7 @@ def create_form_with_questions(creds, form_title, questions):
             body = {"requests": requests}
             form_service.forms().batchUpdate(formId=form_id, body=body).execute()
 
-        st.success("Google Form created successfully!")
+       # st.success("Google Form created successfully!") #Moved to display function
         form_url = f"https://docs.google.com/forms/d/{form_id}/viewform"
         return form_url
 
@@ -270,7 +270,9 @@ def generate_form(qna_engine_instance, topic, num_questions, custom_instructions
 
         if creds: # if creds is still there. To not generate error
             form_url = create_form_with_questions(creds, FORM_TITLE, questions)  # Call form creation
-            return form_url #Returns form
+            display_questions(questions, form_url)  # Call form creation
+
+            return #Returns form
         else:
             st.error("Google Forms authentication failed.") #if for some reason, creds does not exits (it's an error)
             return None #Returns None
@@ -284,25 +286,26 @@ def generate_form(qna_engine_instance, topic, num_questions, custom_instructions
             st.error("Not able to generate the authentication. Please, try again.") # if no able to generate it, show and error
             return None #Return none to break
 
-def display_questions(questions):
+def display_questions(questions, form_url=None):
     """Displays questions in Streamlit."""
     if questions and hasattr(questions, "questions"):
-         for i, question in enumerate(questions.questions):
+        if form_url: #Added
+            st.success(f"Google Form created successfully: [Click here]({form_url})") #Added
+
+        for i, question in enumerate(questions.questions):
             st.subheader(f"Question {i + 1}:")
             st.write(f"**Question:** {question.question}")
-            if hasattr(question, 'options'):  # Multiple choice
+            if hasattr(question, 'options'):
                 st.write("Options:")
                 for j, option in enumerate(question.options):
-                    st.write(f"   {chr(65 + j)}. {option}")  # A, B, C, D
+                    st.write(f"   {chr(65 + j)}. {option}")
                 if hasattr(question, 'answer'):
-                    st.write(f"**Correct Answer:** {question.answer}")  # Add answer for MCQs
-                if hasattr(question, 'explanation') and question.explanation:
-                    st.write(f"**Explanation:** {question.explanation}")
+                    st.write(f"**Correct Answer:** {question.answer}")
             elif hasattr(question, 'answer'):  # True/False (if there's an answer)
                 st.write(f"**Answer:** {question.answer}")
-            if hasattr(question, 'explanation') and question.explanation:  # Common explanation
-                st.write(f"**Explanation:** {question.explanation}")
 
+            if hasattr(question, 'explanation') and question.explanation:
+                st.write(f"**Explanation:** {question.explanation}")
             st.markdown("---")
     else:
         st.error("No questions generated or invalid question format.")
@@ -325,6 +328,8 @@ def main():
             st.warning("Please enter your Google API Key in the sidebar.")
             st.stop()
         genai.configure(api_key=api_key)  # Configure API Key Globally
+        st.markdown("**Powered by** [Educhain](https://github.com/satvik314/educhain)")
+        st.write("❤️ Built by [Build Fast with AI](https://buildfastwithai.com/genai-course)")
 
     model_options = {
         "gemini-2.0-flash": "gemini-2.0-flash",
@@ -355,7 +360,6 @@ def main():
 
         if auth_url: #Added # if the call is true and generates an URL, show on screen the URL to connect
             st.markdown(f"Please login [here]({auth_url})")
-
             #Clear URL for the page so it's not an endless loop.
             st.query_params.clear() #Added
             st.stop() #Added. break
@@ -387,24 +391,20 @@ def main():
                 for chunk in response:
                     if hasattr(chunk.parts[0], 'function_call'):  # Function call detected in chunk
                         function_call = chunk.parts[0].function_call
-                        function_name = function_call.name
+                        function_name = function_name
                         arguments = function_call.args
-                        #full_response = f"Function Call: {function_name} with args: {arguments}"  # No more display
-                        #message_placeholder.markdown(full_response + "▌")  # No more typing effect
-
                         function_called = True  # Set flag
 
                         if function_name in function_map:
                             question_generation_function = function_map[function_name]
                             function_result = question_generation_function(qna_engine_instance, **arguments) #Added
 
-                            if function_result: #Added. If not authenticated it shows a URL. If authenticated it will show form URL
-                                st.markdown(f"Form created: [Click here]({function_result})")#Added #if for is created it show this.
-
-                            else:
-                                st.error("Error occured. Not able to create question/authenticate") # Added if is not able to create questions/authenticate
-                                st.stop()#added
-
+                            display_questions(qna_engine_instance.generate_questions( #Display questions
+                                topic=arguments["topic"],
+                                num=arguments["num_questions"],
+                                question_type="Multiple Choice",
+                                custom_instructions=arguments["custom_instructions"] if "custom_instructions" in arguments else None,
+                            ),form_url = function_result ) # Form URL from function, then passes to display
                         else:
                             st.error(f"Error: Unknown function name '{function_name}' received from model.")
                             full_response = "Error processing function call."
@@ -426,8 +426,6 @@ def main():
                 message_placeholder.markdown(full_response)
 
             st.session_state.messages.append({"role": "assistant", "content": full_response if not function_called else "Function call processed. See questions below."})  # Store a simple message for function calls
-    st.markdown("**Powered by** [Educhain](https://github.com/satvik314/educhain)")
-    st.write("❤️ Built by [Build Fast with AI](https://buildfastwithai.com/genai-course)")
 
 if __name__ == "__main__":
     main()
