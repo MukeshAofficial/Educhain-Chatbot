@@ -455,8 +455,7 @@ def main():
 
                             if function_result: #Added. If not authenticated it shows a URL. If authenticated it will show form URL
                                 if "http" in function_result: #Added. Authentication or form url. If auth then:
-                                    #st.markdown(f"Please authenticate with Google: {function_result}") #Added. #REMOVED THE TEXT. IT SHOWS FORM URL ONLY
-                                    st.markdown(f"Please authenticate with Google:  [Login to Google]({function_result})")
+                                    st.markdown("")
 
                                 else:
                                     st.markdown(f"Form URL: [Click here]({function_result})")#Added #if for is created it show this.
