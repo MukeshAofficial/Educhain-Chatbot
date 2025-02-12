@@ -386,6 +386,12 @@ def main():
             st.stop()
         genai.configure(api_key=api_key)  # Configure API Key Globally
 
+        # Debugging: Force Re-authentication
+        if st.checkbox("Force Re-authentication (Debug)", value=False):
+            st.session_state.pop("credentials", None)
+            st.session_state["authenticated"] = False
+            st.rerun()  # Force Streamlit to re-run the app
+
         # Authentication Button
         if not st.session_state.get("authenticated", False):
             if st.button("Authenticate with Google"):
@@ -403,10 +409,14 @@ def main():
             if auth_code:
                 credentials = complete_authentication(auth_code)
                 if not credentials:
-                    st.error("Authentication failed.")
+                    st.error("Authentication failed. Clearing credentials.")
+                    st.session_state.pop("credentials", None)
+                    st.session_state["authenticated"] = False
+                    st.rerun() #force to re-run
 
     # Main App Content (Conditionally Displayed)
-    if st.session_state.get("authenticated", False):
+    creds = st.session_state.get("credentials", None) #Get the credentials
+    if st.session_state.get("authenticated", False) and creds and not creds.expired:
         model_options = {
             "gemini-2.0-flash": "gemini-2.0-flash",
             "gemini-2.0-flash-lite-preview-02-05": "gemini-2.0-flash-lite-preview-02-05",
