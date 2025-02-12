@@ -23,13 +23,14 @@ FORM_TITLE = "QUIZ"
 # --- Accessing Secrets ---
 secrets_data = st.secrets["google"]  # Access all Google secrets
 
-CLIENT_ID = secrets_data["installed"]["client_id"]
-CLIENT_SECRET = secrets_data["installed"]["client_secret"]
-PROJECT_ID = secrets_data["installed"]["project_id"]
-AUTH_URI = secrets_data["installed"]["auth_uri"]
-TOKEN_URI = secrets_data["installed"]["token_uri"]
-AUTH_PROVIDER_X509_CERT_URL = secrets_data["installed"]["auth_provider_x509_cert_url"]
-REDIRECT_URIS = secrets_data["installed"]["redirect_uris"]
+CLIENT_ID = secrets_data["web"]["client_id"] #Changed
+CLIENT_SECRET = secrets_data["web"]["client_secret"] #Changed
+PROJECT_ID = secrets_data["web"]["project_id"] #Changed
+AUTH_URI = secrets_data["web"]["auth_uri"] #Changed
+TOKEN_URI = secrets_data["web"]["token_uri"] #Changed
+AUTH_PROVIDER_X509_CERT_URL = secrets_data["web"]["auth_provider_x509_cert_url"] #Changed
+REDIRECT_URIS = secrets_data["web"]["redirect_uris"] #Changed
+JAVASCRIPT_ORIGINS = secrets_data["web"]["javascript_origins"] #changed
 
 
 # --- Function Schemas (using Python Dictionaries) ---
@@ -137,14 +138,15 @@ def authenticate_google_api():
 
     try:
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmpfile:
-            json.dump({"installed": {
+            json.dump({"web": {
                     "client_id": CLIENT_ID,
                     "project_id": PROJECT_ID,
                     "auth_uri": AUTH_URI,
                     "token_uri": TOKEN_URI,
                     "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_CERT_URL,
                     "client_secret": CLIENT_SECRET,
-                    "redirect_uris": REDIRECT_URIS
+                    "redirect_uris": REDIRECT_URIS,
+                    "javascript_origins": JAVASCRIPT_ORIGINS
                 }}, tmpfile)
             temp_file_path = tmpfile.name  # Get the path to the temp file
 
@@ -308,29 +310,15 @@ def display_questions(questions):
     if questions and hasattr(questions, "questions"):
         for i, question in enumerate(questions.questions):
             st.subheader(f"Question {i + 1}:")
+            st.write(f"**Question:** {question.question}")
             if hasattr(question, 'options'):
-                st.write(f"**Question:** {question.question}")
                 st.write("Options:")
                 for j, option in enumerate(question.options):
                     st.write(f"   {chr(65 + j)}. {option}")
                 if hasattr(question, 'answer'):
                     st.write(f"**Correct Answer:** {question.answer}")
-                if hasattr(question, 'explanation') and question.explanation:
-                    st.write(f"**Explanation:** {question.explanation}")
-            elif hasattr(question, 'keywords'):
-                st.write(f"**Question:** {question.question}")
-                st.write(f"**Answer:** {question.answer}")
-                if question.keywords:
-                    st.write(f"**Keywords:** {', '.join(question.keywords)}")
-            elif hasattr(question, 'answer'):
-                st.write(f"**Question:** {question.question}")
-                st.write(f"**Answer:** {question.answer}")
-                if hasattr(question, 'explanation') and question.explanation:
-                    st.write(f"**Explanation:** {question.explanation}")
-            else:
-                st.write(f"**Question:** {question.question}")
-                if hasattr(question, 'explanation') and question.explanation:
-                    st.write(f"**Explanation:** {question.explanation}")
+            if hasattr(question, 'explanation') and question.explanation:
+                st.write(f"**Explanation:** {question.explanation}")
             st.markdown("---")
     else:
         st.error("No questions generated or invalid question format.")
