@@ -1,3 +1,4 @@
+
 import streamlit as st
 import google.generativeai as genai
 from googleapiclient.discovery import build
@@ -23,13 +24,14 @@ FORM_TITLE = "QUIZ"
 # --- Accessing Secrets ---
 secrets_data = st.secrets["google"]  # Access all Google secrets
 
-CLIENT_ID = secrets_data["installed"]["client_id"]
-CLIENT_SECRET = secrets_data["installed"]["client_secret"]
-PROJECT_ID = secrets_data["installed"]["project_id"]
-AUTH_URI = secrets_data["installed"]["auth_uri"]
-TOKEN_URI = secrets_data["installed"]["token_uri"]
-AUTH_PROVIDER_X509_CERT_URL = secrets_data["installed"]["auth_provider_x509_cert_url"]
-REDIRECT_URIS = secrets_data["installed"]["redirect_uris"]
+CLIENT_ID = secrets_data["web"]["client_id"] #Changed
+CLIENT_SECRET = secrets_data["web"]["client_secret"] #Changed
+PROJECT_ID = secrets_data["web"]["project_id"] #Changed
+AUTH_URI = secrets_data["web"]["auth_uri"] #Changed
+TOKEN_URI = secrets_data["web"]["token_uri"] #Changed
+AUTH_PROVIDER_X509_CERT_URL = secrets_data["web"]["auth_provider_x509_cert_url"] #Changed
+REDIRECT_URIS = secrets_data["web"]["redirect_uris"] #Changed
+JAVASCRIPT_ORIGINS = secrets_data["web"]["javascript_origins"] #changed
 
 
 # --- Function Schemas (using Python Dictionaries) ---
@@ -137,14 +139,15 @@ def authenticate_google_api():
 
     try:
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmpfile:
-            json.dump({"installed": {
+            json.dump({"web": {
                     "client_id": CLIENT_ID,
                     "project_id": PROJECT_ID,
                     "auth_uri": AUTH_URI,
                     "token_uri": TOKEN_URI,
                     "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_CERT_URL,
                     "client_secret": CLIENT_SECRET,
-                    "redirect_uris": REDIRECT_URIS
+                    "redirect_uris": REDIRECT_URIS,
+                    "javascript_origins": JAVASCRIPT_ORIGINS
                 }}, tmpfile)
             temp_file_path = tmpfile.name  # Get the path to the temp file
 
@@ -163,6 +166,35 @@ def authenticate_google_api():
     except Exception as e:
         st.error(f"Authentication error: {e}. {type(e).__name__} - {str(e)}")
         return None  # Authentication failed
+
+def complete_authentication(auth_code):
+    """Completes the authentication process and stores credentials in session state."""
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmpfile:
+            json.dump({"web": {
+                    "client_id": CLIENT_ID,
+                    "project_id": PROJECT_ID,
+                    "auth_uri": AUTH_URI,
+                    "token_uri": TOKEN_URI,
+                    "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_CERT_URL,
+                    "client_secret": CLIENT_SECRET,
+                    "redirect_uris": REDIRECT_URIS,
+                    "javascript_origins": JAVASCRIPT_ORIGINS
+                }}, tmpfile)
+            temp_file_path = tmpfile.name
+
+        flow = client.flow_from_clientsecrets(temp_file_path, SCOPES)
+        os.remove(temp_file_path)
+        flow.redirect_uri = REDIRECT_URIS[0]  # Must set redirect URI
+
+        creds = flow.step2_exchange(auth_code)
+        st.session_state["credentials"] = creds  # Store in session state
+        st.success("Authentication successful!")
+        return creds
+
+    except Exception as e:
+        st.error(f"Error completing authentication: {e}")
+        return None
 
 def create_form_with_questions(creds, form_title, questions):
     """
@@ -279,9 +311,9 @@ def generate_fill_blank(qna_engine_instance, topic, num_questions, custom_instru
 def generate_form(qna_engine_instance, topic, num_questions, custom_instructions=None):
     """Generates a Google Form with multiple-choice questions."""
     st.info(f"Generating a Google Form with {num_questions} questions on topic: {topic}...")
+    creds = st.session_state.get("credentials") #To persist the creds to call less.
+    if creds and not creds.invalid: #If has creds:
 
-    creds = st.session_state.get("credentials", None) #Get the creds to not always generate authentication.
-    if creds and not creds.invalid:
         questions = qna_engine_instance.generate_questions(
             topic=topic,
             num=num_questions,
@@ -289,48 +321,36 @@ def generate_form(qna_engine_instance, topic, num_questions, custom_instructions
             custom_instructions=custom_instructions
         )
 
-        if creds:
+        if creds: # if creds is still there. To not generate error
             form_url = create_form_with_questions(creds, FORM_TITLE, questions)  # Call form creation
-            return form_url #return the form
+            return form_url #Returns form
         else:
-            st.error("Google Forms authentication failed.") #if it fails to create the form.
-            return None #not able to create the form.
+            st.error("Google Forms authentication failed.")#if for some reason, creds does not exits (it's an error)
+            return None #Returns None
+
     else:
-        auth_url = authenticate_google_api()
-        if auth_url:
-            return auth_url  # Return the authentication URL to display in chat.
+        auth_url = authenticate_google_api() # If no creds, generate the URL.
+
+        if auth_url:#if generated url:
+            return auth_url #return the url to be show in chat.
         else:
-            st.error("Failed to generate authentication URL.") #if it fails to generate authentication
-            return None #not able to authenticate and not able to generate URL, return none.
+            st.error("Not able to generate the authentication. Please, try again.") # if no able to generate it, show and error
+            return None #Return none to break
 
 def display_questions(questions):
     """Displays questions in Streamlit."""
     if questions and hasattr(questions, "questions"):
         for i, question in enumerate(questions.questions):
             st.subheader(f"Question {i + 1}:")
+            st.write(f"**Question:** {question.question}")
             if hasattr(question, 'options'):
-                st.write(f"**Question:** {question.question}")
                 st.write("Options:")
                 for j, option in enumerate(question.options):
                     st.write(f"   {chr(65 + j)}. {option}")
                 if hasattr(question, 'answer'):
                     st.write(f"**Correct Answer:** {question.answer}")
-                if hasattr(question, 'explanation') and question.explanation:
-                    st.write(f"**Explanation:** {question.explanation}")
-            elif hasattr(question, 'keywords'):
-                st.write(f"**Question:** {question.question}")
-                st.write(f"**Answer:** {question.answer}")
-                if question.keywords:
-                    st.write(f"**Keywords:** {', '.join(question.keywords)}")
-            elif hasattr(question, 'answer'):
-                st.write(f"**Question:** {question.question}")
-                st.write(f"**Answer:** {question.answer}")
-                if hasattr(question, 'explanation') and question.explanation:
-                    st.write(f"**Explanation:** {question.explanation}")
-            else:
-                st.write(f"**Question:** {question.question}")
-                if hasattr(question, 'explanation') and question.explanation:
-                    st.write(f"**Explanation:** {question.explanation}")
+            if hasattr(question, 'explanation') and question.explanation:
+                st.write(f"**Explanation:** {question.explanation}")
             st.markdown("---")
     else:
         st.error("No questions generated or invalid question format.")
@@ -365,6 +385,33 @@ def main():
 
     if "messages" not in st.session_state:
         st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you generate questions?"}]
+
+    # Get the authentication code from the URL parameters, if it exists
+    query_params = st.query_params  # Use st.query_params
+    auth_code = query_params.get("code", None)
+
+    if auth_code and not st.session_state.get("credentials"):  # Check if there's an auth_code
+        with st.spinner("Completing authentication..."):  # Added spinner for visual feedback
+            creds = complete_authentication(auth_code)  # Call the function
+
+            if creds: #Added. If its true that the creentials has data
+                st.success("Successfully authenticated") #Added. show in screen, success
+            else: #added # If its not authenticated, if not, it show error.
+                st.error("Authentication failed after redirect.") #Added.
+                st.stop() #Added
+
+    creds = st.session_state.get("credentials") #Added # get all of the credentials after that
+
+    if not creds: #Added #if no has credentials:
+        auth_url = authenticate_google_api() #Added. calls the authentication to get an URL
+
+        if auth_url: #Added # if the call is true and generates an URL, show on screen the URL to connect
+            st.info(f"Please authenticate with Google: {auth_url}") #Added.
+            #Clear URL for the page so it's not an endless loop.
+            st.query_params.clear() #Added
+            st.stop() #Added. break
+        else: #added. If does not create the URL show the error,
+            st.error("Not able to generate the authentication. Please, try again.") #Added.
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
