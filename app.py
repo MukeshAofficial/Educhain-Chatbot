@@ -5,13 +5,14 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport import requests
 from httplib2 import Http
-from oauth2client import file, client, tools  # Needed?  Check later
+#from oauth2client import file, client, tools  # Removed this line as this tools are no longer used
 from educhain import Educhain, LLMConfig
 from educhain.engines import qna_engine
 from langchain_google_genai import ChatGoogleGenerativeAI
 import os
 import json
-import tempfile  # Import tempfile
+import tempfile
+from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
 # --- Configuration ---
 SCOPES = ['https://www.googleapis.com/auth/forms.body']
@@ -31,68 +32,69 @@ REDIRECT_URIS = secrets_data["installed"]["redirect_uris"]
 
 # --- Authentication Functions ---
 def authenticate_google_api():
-    """Authenticates with Google using OAuth2 and stores credentials in session state."""
-    creds = st.session_state.get("credentials", None)
-
-    if creds and not creds.expired:
-        return creds  # Use existing credentials
-
+    """Authenticates with Google using OAuth2 and returns the authorization URL."""
     try:
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmpfile:
             json.dump({"installed": {
-                    "client_id": CLIENT_ID,
-                    "project_id": PROJECT_ID,
-                    "auth_uri": AUTH_URI,
-                    "token_uri": TOKEN_URI,
-                    "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_CERT_URL,
-                    "client_secret": CLIENT_SECRET,
-                    "redirect_uris": REDIRECT_URIS
-                }}, tmpfile)
+                "client_id": CLIENT_ID,
+                "project_id": PROJECT_ID,
+                "auth_uri": AUTH_URI,
+                "token_uri": TOKEN_URI,
+                "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_cert_url,
+                "client_secret": CLIENT_SECRET,
+                "redirect_uris": REDIRECT_URIS
+            }}, tmpfile)
             temp_file_path = tmpfile.name
 
-        flow = client.flow_from_clientsecrets(temp_file_path, SCOPES)
+        flow = InstalledAppFlow.from_client_secrets_file(temp_file_path, SCOPES)
         os.remove(temp_file_path)
 
-        auth_url, state = flow.authorization_url(prompt='consent')  # Force consent screen
-        return auth_url
+        flow.redirect_uri = REDIRECT_URIS[0] #Set the redirect URI
+
+        authorization_url, state = flow.authorization_url(
+            prompt='consent',
+            access_type='offline'
+        )  # get the authorization URL
+
+        st.session_state["oauth_state"] = state # store the state
+
+        return authorization_url
 
     except Exception as e:
         st.error(f"Authentication error: {e}")
         return None
 
-
 def complete_authentication(auth_code):
-    """Completes the authentication process and stores credentials in session state."""
+    """Completes the authentication process using the authorization code."""
     try:
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmpfile:
             json.dump({"installed": {
-                    "client_id": CLIENT_ID,
-                    "project_id": PROJECT_ID,
-                    "auth_uri": AUTH_URI,
-                    "token_uri": TOKEN_URI,
-                    "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_CERT_URL,
-                    "client_secret": CLIENT_SECRET,
-                    "redirect_uris": REDIRECT_URIS
-                }}, tmpfile)
+                "client_id": CLIENT_ID,
+                "project_id": PROJECT_ID,
+                "auth_uri": AUTH_URI,
+                "token_uri": TOKEN_URI,
+                "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_cert_url,
+                "client_secret": CLIENT_SECRET,
+                "redirect_uris": REDIRECT_URIS
+            }}, tmpfile)
             temp_file_path = tmpfile.name
-        flow = client.flow_from_clientsecrets(temp_file_path, SCOPES)
+
+        flow = InstalledAppFlow.from_client_secrets_file(temp_file_path, SCOPES, state=st.session_state.get("oauth_state")) #added state
         os.remove(temp_file_path)
-        flow.redirect_uri = REDIRECT_URIS[0]  # Set redirect URI
+        flow.redirect_uri = REDIRECT_URIS[0]  # Must set redirect URI
 
-        flow.fetch_token(code=auth_code) # Use the code
-
+        token = flow.fetch_token(code=auth_code)
         credentials = flow.credentials
-        st.session_state["credentials"] = credentials  # Store in session state
-        st.session_state["authenticated"] = True # Set session state flag
 
+        st.session_state["credentials"] = credentials
+        st.session_state["authenticated"] = True
         st.success("Authentication successful!")
+
         return credentials
 
     except Exception as e:
         st.error(f"Error completing authentication: {e}")
         return None
-
-
 
 # --- Function Schemas (using Python Dictionaries) ---
 topic_schema = {'type': 'STRING', 'description': 'The topic for generating questions (e.g., Science, History).'}
@@ -257,8 +259,6 @@ def create_form_with_questions(creds, form_title, questions):
         st.error(f"Error creating Google Form: {e}")
         return None
 
-
-
 # --- Question Generation Functions (using Educhain's qna_engine) ---
 # We still use the Educhain engine to actually generate questions, but the function *calling* is handled explicitly.
 def generate_mcq(qna_engine_instance, topic, num_questions, custom_instructions=None):
@@ -397,9 +397,11 @@ def main():
                     st.error("Failed to generate authentication URL.")
 
             # Handle the redirect after authentication
-            auth_code = st.experimental_get_query_params().get("code", None)
+            query_params = st.query_params  # Use st.query_params
+
+            auth_code = query_params.get("code", None)
             if auth_code:
-                credentials = complete_authentication(auth_code[0]) # Get code parameter.
+                credentials = complete_authentication(auth_code)
                 if not credentials:
                     st.error("Authentication failed.")
 
