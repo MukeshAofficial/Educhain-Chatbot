@@ -1,39 +1,80 @@
 import streamlit as st
-from educhain import Educhain, LLMConfig
-from educhain.engines import qna_engine
-from langchain_google_genai import ChatGoogleGenerativeAI
-import os
-import json
 import google.generativeai as genai
-from googleapiclient.discovery import build  # Google Forms API
+from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport import requests
 from httplib2 import Http
 from oauth2client import file, client, tools
+from educhain import Educhain, LLMConfig
+from educhain.engines import qna_engine
+from langchain_google_genai import ChatGoogleGenerativeAI  # Still need this for Educhain LLMConfig
+import os
+import json
+
+
 
 # --- Configuration ---
 SCOPES = [
     'https://www.googleapis.com/auth/forms.body',
 ]
-CREDENTIALS_FILE = 'config.json'
-FORM_TITLE = "AI Generated Quiz"
+FORM_TITLE = "QUIZ"
+
+# --- Accessing Secrets ---
+secrets_data = st.secrets["google"]  # Access all Google secrets
+
+CLIENT_ID = secrets_data["installed"]["client_id"]
+CLIENT_SECRET = secrets_data["installed"]["client_secret"]
+PROJECT_ID = secrets_data["installed"]["project_id"]
+AUTH_URI = secrets_data["installed"]["auth_uri"]
+TOKEN_URI = secrets_data["installed"]["token_uri"]
+AUTH_PROVIDER_X509_CERT_URL = secrets_data["installed"]["auth_provider_x509_cert_url"]
+REDIRECT_URIS = secrets_data["installed"]["redirect_uris"]
+
 
 # --- Function Schemas (using Python Dictionaries) ---
 topic_schema = {'type': 'STRING', 'description': 'The topic for generating questions (e.g., Science, History).'}
 num_questions_schema = {'type': 'INTEGER', 'description': 'The number of questions to generate.'}
 custom_instructions_schema = {'type': 'STRING', 'description': 'Optional instructions for question generation.'}
-question_type_schema = {'type': 'STRING', 'enum': ['Multiple Choice', 'Short Answer', 'True/False', 'Fill in the Blank'], 'description': 'The type of questions to generate.'}
 
-question_params_schema = {
+mcq_params_schema = {
     'type': 'OBJECT',
     'properties': {
         'topic': topic_schema,
         'num_questions': num_questions_schema,
         'custom_instructions': custom_instructions_schema,
-        'question_type': question_type_schema,
     },
-    'required': ['topic', 'num_questions', 'question_type']
+    'required': ['topic', 'num_questions']
+}
+
+short_answer_params_schema = {
+    'type': 'OBJECT',
+    'properties': {
+        'topic': topic_schema,
+        'num_questions': num_questions_schema,
+        'custom_instructions': custom_instructions_schema,
+    },
+    'required': ['topic', 'num_questions']
+}
+
+true_false_params_schema = {
+    'type': 'OBJECT',
+    'properties': {
+        'topic': topic_schema,
+        'num_questions': num_questions_schema,
+        'custom_instructions': custom_instructions_schema,
+    },
+    'required': ['topic', 'num_questions']
+}
+
+fill_blank_params_schema = {
+    'type': 'OBJECT',
+    'properties': {
+        'topic': topic_schema,
+        'num_questions': num_questions_schema,
+        'custom_instructions': custom_instructions_schema,
+    },
+    'required': ['topic', 'num_questions']
 }
 
 generate_form_params_schema = {
@@ -50,9 +91,24 @@ generate_form_params_schema = {
 # Define FunctionDeclarations using dictionaries directly
 function_declarations = [
     {
-        'name': 'generate_questions',
-        'description': 'Generate questions on a given topic and type.',
-        'parameters': question_params_schema,
+        'name': 'generate_mcq',
+        'description': 'Generate multiple choice questions on a given topic.',
+        'parameters': mcq_params_schema,
+    },
+    {
+        'name': 'generate_short_answer',
+        'description': 'Generate short answer questions on a given topic.',
+        'parameters': short_answer_params_schema,
+    },
+    {
+        'name': 'generate_true_false',
+        'description': 'Generate true/false questions on a given topic.',
+        'parameters': true_false_params_schema,
+    },
+    {
+        'name': 'generate_fill_blank',
+        'description': 'Generate fill in the blank questions on a given topic.',
+        'parameters': fill_blank_params_schema,
     },
     {
         'name': 'generate_form',  # New Function
@@ -84,35 +140,24 @@ def authenticate_google_api():
 
     if not creds or creds.invalid:
         try:
-             # Load secrets from Streamlit Secrets (as JSON string)
-            client_secrets_json = st.secrets["google_client_secrets"]
-
-            # Check if the string is not empty
-            if not client_secrets_json:
-                st.error("The google_client_secrets secret is empty.  Please configure your secrets.")
-                return None
-
-            # Attempt to parse the JSON
-            try:
-                config_data = json.loads(client_secrets_json)
-            except json.JSONDecodeError as e:
-                st.error(f"Invalid JSON format in google_client_secrets. Please ensure valid JSON. Error: {e}")
-                return None
-
-             # Save the config_data to a local file, so that the oauth2client library could use it.
-            with open(CREDENTIALS_FILE, 'w') as f:
-                json.dump(config_data, f)
-
-            flow = client.flow_from_clientsecrets(CREDENTIALS_FILE, SCOPES)
+            flow = client.flow_from_clientsecrets(
+                    {
+                         "installed": {
+                            "client_id": CLIENT_ID,
+                            "project_id": PROJECT_ID,
+                            "auth_uri": AUTH_URI,
+                            "token_uri": TOKEN_URI,
+                            "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_CERT_URL,
+                            "client_secret": CLIENT_SECRET,
+                            "redirect_uris": REDIRECT_URIS
+                            }
+                    }, SCOPES)
             creds = tools.run_flow(flow, store)
             return creds  # Return credentials
 
-        except KeyError:
-            st.error("Google Client Secrets not found in Streamlit Secrets.  Please configure your secrets.")
-            return None
         except Exception as e:
             st.error(f"Authentication error: {e}.  Ensure config.json is correct and accessible.")
-            return None
+            return None  # Authentication failed
     else:
         return creds
 
@@ -300,7 +345,7 @@ def main():
     st.title("📚 Educhain Question Generator Chatbot")
 
     with st.sidebar:
-        api_key = st.text_input("Google API Key", type="password")
+        api_key = st.text_input("Google API Key", type="password", help="Enter your Gemini API key here.")
         if not api_key:
             st.warning("Please enter your Google API Key in the sidebar.")
             st.stop()
