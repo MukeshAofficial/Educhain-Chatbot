@@ -12,6 +12,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI  # Still need this for
 import os
 import json
 import tempfile
+from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
 # --- Configuration ---
 SCOPES = [
@@ -153,7 +154,10 @@ def authenticate_google_api():
         # Clean up the temporary file
         os.remove(temp_file_path)
 
+        flow.redirect_uri = REDIRECT_URIS[0]
+
         auth_url = flow.step1_get_authorize_url() # Get the authorization URL
+
         return auth_url
 
     except Exception as e:
