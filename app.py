@@ -1,4 +1,3 @@
-
 import streamlit as st
 import google.generativeai as genai
 from googleapiclient.discovery import build
@@ -376,6 +375,11 @@ def main():
             st.stop()
         genai.configure(api_key=api_key)  # Configure API Key Globally
 
+        st.markdown("**Powered by** [Educhain](https://github.com/satvik314/educhain)")
+        st.write("❤️ Built by [Build Fast with AI](https://buildfastwithai.com/genai-course)")
+
+
+
     model_options = {
         "gemini-2.0-flash": "gemini-2.0-flash",
         "gemini-2.0-flash-lite-preview-02-05": "gemini-2.0-flash-lite-preview-02-05",
@@ -406,7 +410,8 @@ def main():
         auth_url = authenticate_google_api() #Added. calls the authentication to get an URL
 
         if auth_url: #Added # if the call is true and generates an URL, show on screen the URL to connect
-            st.info(f"Please authenticate with Google: {auth_url}") #Added.
+
+            st.markdown(f" Please authenticate with Google:  [Login to Google]({auth_url})")  #Added.
             #Clear URL for the page so it's not an endless loop.
             st.query_params.clear() #Added
             st.stop() #Added. break
@@ -439,8 +444,9 @@ def main():
                         function_call = chunk.parts[0].function_call
                         function_name = function_call.name
                         arguments = function_call.args
-                        full_response = f"Function Call: {function_name} with args: {arguments}"  # Simple text for UI
-                        message_placeholder.markdown(full_response + "▌")  # Show function call info
+                        #full_response = f"Function Call: {function_name} with args: {arguments}"  # Simple text for UI  #Removed funtion called
+
+                        #message_placeholder.markdown(full_response + "▌")  # Show function call info #Removed funtion called
                         function_called = True  # Set flag
 
                         if function_name in function_map:
@@ -449,10 +455,11 @@ def main():
 
                             if function_result: #Added. If not authenticated it shows a URL. If authenticated it will show form URL
                                 if "http" in function_result: #Added. Authentication or form url. If auth then:
-                                    st.markdown(f"Please authenticate with Google: {function_result}") #Added.
+                                    #st.markdown(f"Please authenticate with Google: {function_result}") #Added. #REMOVED THE TEXT. IT SHOWS FORM URL ONLY
+                                    st.markdown(f"Please authenticate with Google:  [Login to Google]({function_result})")
 
                                 else:
-                                    st.markdown(f"Form created: {function_result}")#Added #if for is created it show this.
+                                    st.markdown(f"Form URL: [Click here]({function_result})")#Added #if for is created it show this.
 
                             else:
                                 st.error("Error occured. Not able to create question/authenticate") # Added if is not able to create questions/authenticate
