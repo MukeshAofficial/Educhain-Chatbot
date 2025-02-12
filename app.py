@@ -16,14 +16,14 @@ from oauth2client import file, client, tools
 SCOPES = [
     'https://www.googleapis.com/auth/forms.body',
 ]
-CREDENTIALS_FILE = 'config.json'  # Used only to temporarily store the secrets in the file
+CREDENTIALS_FILE = 'config.json'
 FORM_TITLE = "AI Generated Quiz"
 
 # --- Function Schemas (using Python Dictionaries) ---
 topic_schema = {'type': 'STRING', 'description': 'The topic for generating questions (e.g., Science, History).'}
 num_questions_schema = {'type': 'INTEGER', 'description': 'The number of questions to generate.'}
 custom_instructions_schema = {'type': 'STRING', 'description': 'Optional instructions for question generation.'}
-question_type_schema = {'type': 'STRING', 'enum': ['Multiple Choice', 'Short Answer', 'True/False', 'Fill in the Blank'], 'description': 'The type of questions to generate.'}  # ADDED QUESTION TYPE
+question_type_schema = {'type': 'STRING', 'enum': ['Multiple Choice', 'Short Answer', 'True/False', 'Fill in the Blank'], 'description': 'The type of questions to generate.'}
 
 question_params_schema = {
     'type': 'OBJECT',
@@ -163,20 +163,23 @@ def create_form_with_questions(creds, form_title, questions, question_type):  # 
         st.error(f"Error creating Google Form: {e}")
         return None
 
-def generate_form(qna_engine_instance, topic, num_questions, question_type, custom_instructions=None):  # Included question_type
-    """Generates a Google Form with AI-generated questions."""
-    st.info(f"Generating a Google Form with {num_questions} {question_type} questions on topic: {topic}...")
+def generate_form(qna_engine_instance, topic, num_questions, custom_instructions=None):
+    """Generates a Google Form with multiple-choice questions."""
+    st.info(f"Generating a Google Form with {num_questions} questions on topic: {topic}...")
+
+    # **IMPORTANT:**  Force the question_type to be "Multiple Choice"
     questions = qna_engine_instance.generate_questions(
         topic=topic,
         num=num_questions,
-        question_type=question_type,
+        question_type="Multiple Choice",
         custom_instructions=custom_instructions
     )
 
     creds = authenticate_google_api()
     if creds:
-        form_url = create_form_with_questions(creds, FORM_TITLE, questions, question_type)  # Pass the question_type
-        return form_url
+        form_url = create_form_with_questions(creds, FORM_TITLE, questions, "Multiple Choice")  # Call form creation
+
+        return form_url  # Return URL for function call handling
     else:
         st.error("Google Forms authentication failed.")
         return None
