@@ -223,7 +223,7 @@ def create_form_with_questions(creds, form_title, questions):
             body = {"requests": requests}
             form_service.forms().batchUpdate(formId=form_id, body=body).execute()
 
-       # st.success("Google Form created successfully!") #Moved to display function
+        #st.success("Google Form created successfully!") #Moved to display function
         form_url = f"https://docs.google.com/forms/d/{form_id}/viewform"
         return form_url
 
@@ -272,7 +272,7 @@ def generate_form(qna_engine_instance, topic, num_questions, custom_instructions
             form_url = create_form_with_questions(creds, FORM_TITLE, questions)  # Call form creation
             display_questions(questions, form_url)  # Call form creation
 
-            return #Returns form
+            return #Returns
         else:
             st.error("Google Forms authentication failed.") #if for some reason, creds does not exits (it's an error)
             return None #Returns None
@@ -321,6 +321,9 @@ def main():
     """Main function to run the Educhain Question Generator chatbot with function calling in Streamlit."""
     st.set_page_config(page_title="Educhain Chatbot", page_icon="📚", layout="wide")
     st.title("📚 Educhain Question Generator Chatbot")
+
+    # Initialize function_name outside the try block
+    function_name = None
 
     with st.sidebar:
         api_key = st.text_input("Google API Key", type="password", help="Enter your Gemini API key here.")
@@ -391,20 +394,27 @@ def main():
                 for chunk in response:
                     if hasattr(chunk.parts[0], 'function_call'):  # Function call detected in chunk
                         function_call = chunk.parts[0].function_call
-                        function_name = function_name
+                        function_name = function_call.name #
                         arguments = function_call.args
+                        #full_response = f"Function Call: {function_name} with args: {arguments}"  # No more display
+                        #message_placeholder.markdown(full_response + "▌")  # No more typing effect
+
                         function_called = True  # Set flag
 
                         if function_name in function_map:
                             question_generation_function = function_map[function_name]
                             function_result = question_generation_function(qna_engine_instance, **arguments) #Added
-
-                            display_questions(qna_engine_instance.generate_questions( #Display questions
-                                topic=arguments["topic"],
-                                num=arguments["num_questions"],
-                                question_type="Multiple Choice",
-                                custom_instructions=arguments["custom_instructions"] if "custom_instructions" in arguments else None,
-                            ),form_url = function_result ) # Form URL from function, then passes to display
+                            if function_name == "generate_form":
+                                if function_result is not None:
+                                    if "questions" in locals():
+                                         del questions
+                                    questions = qna_engine_instance.generate_questions( #Display questions
+                                        topic=arguments["topic"],
+                                        num=arguments["num_questions"],
+                                        question_type="Multiple Choice",
+                                        custom_instructions=arguments["custom_instructions"] if "custom_instructions" in arguments else None,
+                                    )
+                                    display_questions(questions,form_url = function_result ) # Form URL from function, then passes to display
                         else:
                             st.error(f"Error: Unknown function name '{function_name}' received from model.")
                             full_response = "Error processing function call."
