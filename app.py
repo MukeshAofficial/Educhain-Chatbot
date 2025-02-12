@@ -1,3 +1,4 @@
+
 import streamlit as st
 import google.generativeai as genai
 from googleapiclient.discovery import build
@@ -12,7 +13,6 @@ from langchain_google_genai import ChatGoogleGenerativeAI  # Still need this for
 import os
 import json
 import tempfile
-from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
 # --- Configuration ---
 SCOPES = [
@@ -23,14 +23,13 @@ FORM_TITLE = "QUIZ"
 # --- Accessing Secrets ---
 secrets_data = st.secrets["google"]  # Access all Google secrets
 
-CLIENT_ID = secrets_data["web"]["client_id"] #Changed
-CLIENT_SECRET = secrets_data["web"]["client_secret"] #Changed
-PROJECT_ID = secrets_data["web"]["project_id"] #Changed
-AUTH_URI = secrets_data["web"]["auth_uri"] #Changed
-TOKEN_URI = secrets_data["web"]["token_uri"] #Changed
-AUTH_PROVIDER_X509_CERT_URL = secrets_data["web"]["auth_provider_x509_cert_url"] #Changed
-REDIRECT_URIS = secrets_data["web"]["redirect_uris"] #Changed
-JAVASCRIPT_ORIGINS = secrets_data["web"]["javascript_origins"] #changed
+CLIENT_ID = secrets_data["installed"]["client_id"]
+CLIENT_SECRET = secrets_data["installed"]["client_secret"]
+PROJECT_ID = secrets_data["installed"]["project_id"]
+AUTH_URI = secrets_data["installed"]["auth_uri"]
+TOKEN_URI = secrets_data["installed"]["token_uri"]
+AUTH_PROVIDER_X509_CERT_URL = secrets_data["installed"]["auth_provider_x509_cert_url"]
+REDIRECT_URIS = secrets_data["installed"]["redirect_uris"]
 
 
 # --- Function Schemas (using Python Dictionaries) ---
@@ -138,15 +137,14 @@ def authenticate_google_api():
 
     try:
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmpfile:
-            json.dump({"web": {
+            json.dump({"installed": {
                     "client_id": CLIENT_ID,
                     "project_id": PROJECT_ID,
                     "auth_uri": AUTH_URI,
                     "token_uri": TOKEN_URI,
                     "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_CERT_URL,
                     "client_secret": CLIENT_SECRET,
-                    "redirect_uris": REDIRECT_URIS,
-                    "javascript_origins": JAVASCRIPT_ORIGINS
+                    "redirect_uris": REDIRECT_URIS
                 }}, tmpfile)
             temp_file_path = tmpfile.name  # Get the path to the temp file
 
@@ -156,10 +154,7 @@ def authenticate_google_api():
         # Clean up the temporary file
         os.remove(temp_file_path)
 
-        flow.redirect_uri = REDIRECT_URIS[0]
-
         auth_url = flow.step1_get_authorize_url() # Get the authorization URL
-
         return auth_url
 
     except Exception as e:
@@ -310,15 +305,29 @@ def display_questions(questions):
     if questions and hasattr(questions, "questions"):
         for i, question in enumerate(questions.questions):
             st.subheader(f"Question {i + 1}:")
-            st.write(f"**Question:** {question.question}")
             if hasattr(question, 'options'):
+                st.write(f"**Question:** {question.question}")
                 st.write("Options:")
                 for j, option in enumerate(question.options):
                     st.write(f"   {chr(65 + j)}. {option}")
                 if hasattr(question, 'answer'):
                     st.write(f"**Correct Answer:** {question.answer}")
-            if hasattr(question, 'explanation') and question.explanation:
-                st.write(f"**Explanation:** {question.explanation}")
+                if hasattr(question, 'explanation') and question.explanation:
+                    st.write(f"**Explanation:** {question.explanation}")
+            elif hasattr(question, 'keywords'):
+                st.write(f"**Question:** {question.question}")
+                st.write(f"**Answer:** {question.answer}")
+                if question.keywords:
+                    st.write(f"**Keywords:** {', '.join(question.keywords)}")
+            elif hasattr(question, 'answer'):
+                st.write(f"**Question:** {question.question}")
+                st.write(f"**Answer:** {question.answer}")
+                if hasattr(question, 'explanation') and question.explanation:
+                    st.write(f"**Explanation:** {question.explanation}")
+            else:
+                st.write(f"**Question:** {question.question}")
+                if hasattr(question, 'explanation') and question.explanation:
+                    st.write(f"**Explanation:** {question.explanation}")
             st.markdown("---")
     else:
         st.error("No questions generated or invalid question format.")
