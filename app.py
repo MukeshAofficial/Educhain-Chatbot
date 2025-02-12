@@ -16,7 +16,7 @@ from oauth2client import file, client, tools
 SCOPES = [
     'https://www.googleapis.com/auth/forms.body',
 ]
-CREDENTIALS_FILE = 'config.json' # Used only to temporarily store the secrets in the file
+CREDENTIALS_FILE = 'config.json'  # Used only to temporarily store the secrets in the file
 FORM_TITLE = "AI Generated Quiz"
 
 # --- Function Schemas (using Python Dictionaries) ---
@@ -89,22 +89,31 @@ def authenticate_google_api():
 
     if not creds or creds.invalid:
         try:
-            # Load secrets from Streamlit Secrets (as JSON string)
-            client_secrets_json = st.secrets["google_client_secrets"]
-            config_data = json.loads(client_secrets_json) if isinstance(client_secrets_json, str) else client_secrets_json
-             # Save the config_data to a local file, so that the oauth2client library could use it.
-            with open(CREDENTIALS_FILE, 'w') as f:
-                json.dump(config_data, f)
+            # Load secrets from Streamlit Secrets
+            client_secrets = st.secrets["google_client_secrets"]
 
-            flow = client.flow_from_clientsecrets(CREDENTIALS_FILE, SCOPES)
-            creds = tools.run_flow(flow, store)
+            # Ensure client_secrets is a dictionary
+            if isinstance(client_secrets, str):
+                client_secrets = json.loads(client_secrets)
+
+            # Create a flow object and run it
+            flow = client.flow_from_clientsecrets(
+                CREDENTIALS_FILE,  # Not used for loading, only for type hint
+                SCOPES
+            )
+
+            # Write client secrets to CREDENTIALS_FILE only if it's not a file path
+            with open(CREDENTIALS_FILE, 'w') as f:
+                json.dump(client_secrets, f)  # Writing as dictionary
+
+            creds = tools.run_flow(flow, store) # Authenticate with the config
             return creds  # Return credentials
 
         except KeyError:
-            st.error("Google Client Secrets not found in Streamlit Secrets.  Please configure your secrets.")
+            st.error("Google Client Secrets not found in Streamlit Secrets. Please configure your secrets.")
             return None
         except Exception as e:
-            st.error(f"Authentication error: {e}.  Ensure config.json is correct and accessible. Error: {e}")
+            st.error(f"Authentication error: {e}. Ensure config.json is correct and accessible. Error: {e}")
             return None
     else:
         return creds
