@@ -523,11 +523,5 @@ def main():
 
             st.session_state.messages.append({"role": "assistant", "content": full_response if not function_called else "Function call processed. See questions below."})  # Store a simple message for function calls
 
-    # Re-display all messages.  This is crucial.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-
 if __name__ == "__main__":
     main()
