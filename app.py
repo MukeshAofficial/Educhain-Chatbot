@@ -26,7 +26,7 @@ CLIENT_SECRET = secrets_data["installed"]["client_secret"]
 PROJECT_ID = secrets_data["installed"]["project_id"]
 AUTH_URI = secrets_data["installed"]["auth_uri"]
 TOKEN_URI = secrets_data["installed"]["token_uri"]
-AUTH_PROVIDER_X509_CERT_URL = secrets_data["installed"]["auth_provider_x509_cert_url"]
+#AUTH_PROVIDER_X509_CERT_URL = secrets_data["installed"]["auth_provider_x509_cert_url"] #Not required.
 REDIRECT_URIS = secrets_data["installed"]["redirect_uris"]
 
 
@@ -40,7 +40,7 @@ def authenticate_google_api():
                 "project_id": PROJECT_ID,
                 "auth_uri": AUTH_URI,
                 "token_uri": TOKEN_URI,
-                "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_cert_url,
+                #"auth_provider_x509_cert_url": AUTH_PROVIDER_X509_cert_url, #Not required
                 "client_secret": CLIENT_SECRET,
                 "redirect_uris": REDIRECT_URIS
             }}, tmpfile)
@@ -73,7 +73,7 @@ def complete_authentication(auth_code):
                 "project_id": PROJECT_ID,
                 "auth_uri": AUTH_URI,
                 "token_uri": TOKEN_URI,
-                "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_cert_url,
+                #"auth_provider_x509_cert_url": AUTH_PROVIDER_X509_cert_url, #Not required
                 "client_secret": CLIENT_SECRET,
                 "redirect_uris": REDIRECT_URIS
             }}, tmpfile)
@@ -487,6 +487,3 @@ def main():
                 st.session_state.messages.append({"role": "assistant", "content": full_response if not function_called else "Function call processed. See questions below."})  # Store a simple message for function calls
     else:
         st.info("Please authenticate with Google to use this app.")
-
-if __name__ == "__main__":
-    main()
