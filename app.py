@@ -83,9 +83,10 @@ generate_form_params_schema = {
     'properties': {
         'topic': topic_schema,
         'num_questions': num_questions_schema,
+        'question_type': {'type': 'STRING', 'enum': ['Multiple Choice', 'Short Answer', 'True/False', 'Fill in the Blank'], 'description': 'The type of questions to generate for the form.'},
         'custom_instructions': custom_instructions_schema,
     },
-    'required': ['topic', 'num_questions']
+    'required': ['topic', 'num_questions', 'question_type']
 }
 
 # Define FunctionDeclarations using dictionaries directly
@@ -112,7 +113,7 @@ function_declarations = [
     },
     {
         'name': 'generate_form',  # New Function
-        'description': 'Generate a Google Form with multiple choice questions.',
+        'description': 'Generate a Google Form with questions of the specified type.',
         'parameters': generate_form_params_schema
     },
 ]
@@ -195,9 +196,10 @@ def complete_authentication(auth_code):
         st.error(f"Error completing authentication: {e}")
         return None
 
-def create_form_with_questions(creds, form_title, questions):
+def create_form_with_questions(creds, form_title, questions, question_type):
     """
     Creates a new Google Form with the given title and adds the provided questions.
+    Handles different question types.
     """
     try:
         form_service = build('forms', 'v1', http=creds.authorize(Http()))
@@ -214,7 +216,7 @@ def create_form_with_questions(creds, form_title, questions):
         # Build the batchUpdate request payload.
         requests = []
         for i, question_data in enumerate(questions.questions):
-            if hasattr(question_data, 'options'):  # Multiple choice
+            if question_type == "Multiple Choice":
                 question = {
                     "createItem": {
                         "item": {
@@ -232,7 +234,41 @@ def create_form_with_questions(creds, form_title, questions):
                     }
                 }
                 requests.append(question)
-            else:  # Assuming short answer for now
+            elif question_type == "Short Answer":
+                question = {
+                    "createItem": {
+                        "item": {
+                            "title": question_data.question,
+                            "questionItem": {
+                                "question": {
+                                    "textQuestion": {}
+                                }
+                            }
+                        },
+                        "location": {"index": i}
+                    }
+                }
+                requests.append(question)
+            elif question_type == "True/False":
+                question = {
+                    "createItem": {
+                        "item": {
+                            "title": question_data.question,
+                            "questionItem": {
+                                "question": {
+                                    "choiceQuestion": {
+                                        "type": "RADIO",
+                                        "options": [{"value": "True"}, {"value": "False"}]
+                                    }
+                                }
+                            }
+                        },
+                        "location": {"index": i}
+                    }
+                }
+                requests.append(question)
+
+            elif question_type == "Fill in the Blank":
                 question = {
                     "createItem": {
                         "item": {
@@ -307,21 +343,21 @@ def generate_fill_blank(qna_engine_instance, topic, num_questions, custom_instru
     )
     return questions
 
-def generate_form(qna_engine_instance, topic, num_questions, custom_instructions=None):
-    """Generates a Google Form with multiple-choice questions."""
-    st.info(f"Generating a Google Form with {num_questions} questions on topic: {topic}...")
+def generate_form(qna_engine_instance, topic, num_questions, question_type, custom_instructions=None):
+    """Generates a Google Form with questions of the specified type."""
+    st.info(f"Generating a Google Form with {num_questions} {question_type} questions on topic: {topic}...")
     creds = st.session_state.get("credentials") #To persist the creds to call less.
     if creds and not creds.invalid: #If has creds:
 
         questions = qna_engine_instance.generate_questions(
             topic=topic,
             num=num_questions,
-            question_type="Multiple Choice",  # For now, only MCQs
+            question_type=question_type,
             custom_instructions=custom_instructions
         )
 
         if creds: # if creds is still there. To not generate error
-            form_url = create_form_with_questions(creds, FORM_TITLE, questions)  # Call form creation
+            form_url = create_form_with_questions(creds, FORM_TITLE, questions, question_type)  # Call form creation
             return form_url #Returns form
         else:
             st.error("Google Forms authentication failed.")#if for some reason, creds does not exits (it's an error)
