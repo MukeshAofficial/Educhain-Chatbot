@@ -287,17 +287,22 @@ def generate_form(qna_engine_instance, topic, num_questions, custom_instructions
 def display_questions(questions):
     """Displays questions in Streamlit."""
     if questions and hasattr(questions, "questions"):
-        for i, question in enumerate(questions.questions):
+         for i, question in enumerate(questions.questions):
             st.subheader(f"Question {i + 1}:")
             st.write(f"**Question:** {question.question}")
-            if hasattr(question, 'options'):
+            if hasattr(question, 'options'):  # Multiple choice
                 st.write("Options:")
                 for j, option in enumerate(question.options):
-                    st.write(f"   {chr(65 + j)}. {option}")
+                    st.write(f"   {chr(65 + j)}. {option}")  # A, B, C, D
                 if hasattr(question, 'answer'):
-                    st.write(f"**Correct Answer:** {question.answer}")
-            if hasattr(question, 'explanation') and question.explanation:
+                    st.write(f"**Correct Answer:** {question.answer}")  # Add answer for MCQs
+                if hasattr(question, 'explanation') and question.explanation:
+                    st.write(f"**Explanation:** {question.explanation}")
+            elif hasattr(question, 'answer'):  # True/False (if there's an answer)
+                st.write(f"**Answer:** {question.answer}")
+            if hasattr(question, 'explanation') and question.explanation:  # Common explanation
                 st.write(f"**Explanation:** {question.explanation}")
+
             st.markdown("---")
     else:
         st.error("No questions generated or invalid question format.")
@@ -323,7 +328,6 @@ def main():
 
     model_options = {
         "gemini-2.0-flash": "gemini-2.0-flash",
-        "gemini-2.0-flash-lite-preview-02-05": "gemini-2.0-flash-lite-preview-02-05",
     }
     model_name = st.selectbox("Select Model", options=list(model_options.keys()), format_func=lambda x: model_options[x])
 
@@ -350,20 +354,14 @@ def main():
         auth_url = authenticate_google_api() #Added. calls the authentication to get an URL
 
         if auth_url: #Added # if the call is true and generates an URL, show on screen the URL to connect
+            st.markdown(f"Please login [here]({auth_url})")
 
-            st.session_state["auth_url"] = auth_url #Added.Save link.
+            #Clear URL for the page so it's not an endless loop.
+            st.query_params.clear() #Added
+            st.stop() #Added. break
         else: #added. If does not create the URL show the error,
             st.error("Not able to generate the authentication. Please, try again.") #Added.
             st.stop()
-    auth_url =  st.session_state.get("auth_url")
-    if auth_url:
-
-        st.markdown(f"Please login [here]({auth_url})")
-        #Clear URL for the page so it's not an endless loop.
-        st.query_params.clear() #Added
-        st.session_state.pop("auth_url", None)
-        st.stop() #Added. break
-
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -391,8 +389,9 @@ def main():
                         function_call = chunk.parts[0].function_call
                         function_name = function_call.name
                         arguments = function_call.args
-                        full_response = f"Function Call: {function_name} with args: {arguments}"  # Simple text for UI
-                        message_placeholder.markdown(full_response + "▌")  # Show function call info
+                        #full_response = f"Function Call: {function_name} with args: {arguments}"  # No more display
+                        #message_placeholder.markdown(full_response + "▌")  # No more typing effect
+
                         function_called = True  # Set flag
 
                         if function_name in function_map:
@@ -400,14 +399,12 @@ def main():
                             function_result = question_generation_function(qna_engine_instance, **arguments) #Added
 
                             if function_result: #Added. If not authenticated it shows a URL. If authenticated it will show form URL
-
-                                st.markdown(f"Form created: {function_result}")#Added #if for is created it show this.
+                                st.markdown(f"Form created: [Click here]({function_result})")#Added #if for is created it show this.
 
                             else:
                                 st.error("Error occured. Not able to create question/authenticate") # Added if is not able to create questions/authenticate
                                 st.stop()#added
 
-                            function_called = True  # Redundant, but for clarity
                         else:
                             st.error(f"Error: Unknown function name '{function_name}' received from model.")
                             full_response = "Error processing function call."
@@ -429,6 +426,8 @@ def main():
                 message_placeholder.markdown(full_response)
 
             st.session_state.messages.append({"role": "assistant", "content": full_response if not function_called else "Function call processed. See questions below."})  # Store a simple message for function calls
+    st.markdown("**Powered by** [Educhain](https://github.com/satvik314/educhain)")
+    st.write("❤️ Built by [Build Fast with AI](https://buildfastwithai.com/genai-course)")
 
 if __name__ == "__main__":
     main()
