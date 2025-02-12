@@ -13,8 +13,6 @@ import os
 import json
 import tempfile
 
-
-
 # --- Configuration ---
 SCOPES = [
     'https://www.googleapis.com/auth/forms.body',
@@ -88,7 +86,6 @@ generate_form_params_schema = {
     'required': ['topic', 'num_questions']
 }
 
-
 # Define FunctionDeclarations using dictionaries directly
 function_declarations = [
     {
@@ -131,43 +128,37 @@ def initialize_gemini_model(model_name, tools_config_):  # Renamed to tools_conf
     return gemini_model
 
 def authenticate_google_api():
-    """
-    Authenticates with Google using OAuth2.
-    Uses an existing token in 'storage.json' if available.
-    Otherwise, starts the OAuth2 flow.
-    """
-    store = file.Storage('storage.json')
-    creds = store.get()
+    """Authenticates with Google using OAuth2.
+    Returns the authorization URL if authentication is needed, otherwise None."""
+    creds = st.session_state.get("credentials", None)
+    if creds and not creds.invalid:
+        return None  # Already authenticated
 
-    if not creds or creds.invalid:
-        try:
-            # Create a temporary file
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmpfile:
-                json.dump({"installed": {
-                        "client_id": CLIENT_ID,
-                        "project_id": PROJECT_ID,
-                        "auth_uri": AUTH_URI,
-                        "token_uri": TOKEN_URI,
-                        "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_CERT_URL,
-                        "client_secret": CLIENT_SECRET,
-                        "redirect_uris": REDIRECT_URIS
-                    }}, tmpfile)
-                temp_file_path = tmpfile.name  # Get the path to the temp file
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmpfile:
+            json.dump({"installed": {
+                    "client_id": CLIENT_ID,
+                    "project_id": PROJECT_ID,
+                    "auth_uri": AUTH_URI,
+                    "token_uri": TOKEN_URI,
+                    "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_CERT_URL,
+                    "client_secret": CLIENT_SECRET,
+                    "redirect_uris": REDIRECT_URIS
+                }}, tmpfile)
+            temp_file_path = tmpfile.name  # Get the path to the temp file
 
-            # Pass the temporary file path to flow_from_clientsecrets
-            flow = client.flow_from_clientsecrets(temp_file_path, SCOPES)
+        # Pass the temporary file path to flow_from_clientsecrets
+        flow = client.flow_from_clientsecrets(temp_file_path, SCOPES)
 
-            # Clean up the temporary file
-            os.remove(temp_file_path)
+        # Clean up the temporary file
+        os.remove(temp_file_path)
 
-            creds = tools.run_flow(flow, store)
-            return creds  # Return credentials
+        auth_url = flow.step1_get_authorize_url() # Get the authorization URL
+        return auth_url
 
-        except Exception as e:
-            st.error(f"Authentication error: {e}. {type(e).__name__} - {str(e)}")
-            return None  # Authentication failed
-    else:
-        return creds
+    except Exception as e:
+        st.error(f"Authentication error: {e}. {type(e).__name__} - {str(e)}")
+        return None  # Authentication failed
 
 def create_form_with_questions(creds, form_title, questions):
     """
@@ -235,8 +226,6 @@ def create_form_with_questions(creds, form_title, questions):
         st.error(f"Error creating Google Form: {e}")
         return None
 
-
-
 # --- Question Generation Functions (using Educhain's qna_engine) ---
 # We still use the Educhain engine to actually generate questions, but the function *calling* is handled explicitly.
 def generate_mcq(qna_engine_instance, topic, num_questions, custom_instructions=None):
@@ -250,7 +239,6 @@ def generate_mcq(qna_engine_instance, topic, num_questions, custom_instructions=
     )
     return questions
 
-
 def generate_short_answer(qna_engine_instance, topic, num_questions, custom_instructions=None):
     """Generates and displays Short Answer Questions."""
     st.info(f"Generating {num_questions} Short Answer Questions on topic: {topic}...")  # Added info message
@@ -261,7 +249,6 @@ def generate_short_answer(qna_engine_instance, topic, num_questions, custom_inst
         custom_instructions=custom_instructions
     )
     return questions
-
 
 def generate_true_false(qna_engine_instance, topic, num_questions, custom_instructions=None):
     """Generates and displays True/False Questions."""
@@ -274,7 +261,6 @@ def generate_true_false(qna_engine_instance, topic, num_questions, custom_instru
     )
     return questions
 
-
 def generate_fill_blank(qna_engine_instance, topic, num_questions, custom_instructions=None):
     """Generates and displays Fill in the Blank Questions."""
     st.info(f"Generating {num_questions} Fill in the Blank Questions on topic: {topic}...")  # Added info message
@@ -286,25 +272,32 @@ def generate_fill_blank(qna_engine_instance, topic, num_questions, custom_instru
     )
     return questions
 
-
 def generate_form(qna_engine_instance, topic, num_questions, custom_instructions=None):
     """Generates a Google Form with multiple-choice questions."""
     st.info(f"Generating a Google Form with {num_questions} questions on topic: {topic}...")
-    questions = qna_engine_instance.generate_questions(
-        topic=topic,
-        num=num_questions,
-        question_type="Multiple Choice",  # For now, only MCQs
-        custom_instructions=custom_instructions
-    )
 
-    creds = authenticate_google_api()
-    if creds:
-        form_url = create_form_with_questions(creds, FORM_TITLE, questions)  # Call form creation
+    creds = st.session_state.get("credentials", None) #Get the creds to not always generate authentication.
+    if creds and not creds.invalid:
+        questions = qna_engine_instance.generate_questions(
+            topic=topic,
+            num=num_questions,
+            question_type="Multiple Choice",  # For now, only MCQs
+            custom_instructions=custom_instructions
+        )
 
-        return form_url  # Return URL for function call handling
+        if creds:
+            form_url = create_form_with_questions(creds, FORM_TITLE, questions)  # Call form creation
+            return form_url #return the form
+        else:
+            st.error("Google Forms authentication failed.") #if it fails to create the form.
+            return None #not able to create the form.
     else:
-        st.error("Google Forms authentication failed.")
-        return None
+        auth_url = authenticate_google_api()
+        if auth_url:
+            return auth_url  # Return the authentication URL to display in chat.
+        else:
+            st.error("Failed to generate authentication URL.") #if it fails to generate authentication
+            return None #not able to authenticate and not able to generate URL, return none.
 
 def display_questions(questions):
     """Displays questions in Streamlit."""
@@ -401,20 +394,18 @@ def main():
 
                         if function_name in function_map:
                             question_generation_function = function_map[function_name]
-                            if function_name == "generate_form":  # Special handling for form generation
+                            function_result = question_generation_function(qna_engine_instance, **arguments) #Added
 
-                                form_url = question_generation_function(qna_engine_instance, **arguments)
-                                if form_url:
-                                    full_response = f"Google Form created: [Click here]({form_url})"  # Link to form
-                                    message_placeholder.markdown(full_response)  # Display link
+                            if function_result: #Added. If not authenticated it shows a URL. If authenticated it will show form URL
+                                if "http" in function_result: #Added. Authentication or form url. If auth then:
+                                    st.markdown(f"Please authenticate with Google: {function_result}") #Added.
+
                                 else:
-                                    full_response = "Failed to create Google Form."
-                                    message_placeholder.markdown(full_response)
+                                    st.markdown(f"Form created: {function_result}")#Added #if for is created it show this.
 
-                            else: # Existing question types
-                                questions = question_generation_function(qna_engine_instance, **arguments)
-                                message_placeholder.empty()  # Clear function call text
-                                display_questions(questions)  # Directly display questions in chat
+                            else:
+                                st.error("Error occured. Not able to create question/authenticate") # Added if is not able to create questions/authenticate
+                                st.stop()#added
 
                             function_called = True  # Redundant, but for clarity
                         else:
@@ -438,7 +429,6 @@ def main():
                 message_placeholder.markdown(full_response)
 
             st.session_state.messages.append({"role": "assistant", "content": full_response if not function_called else "Function call processed. See questions below."})  # Store a simple message for function calls
-
 
 if __name__ == "__main__":
     main()
