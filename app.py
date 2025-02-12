@@ -11,7 +11,7 @@ from educhain.engines import qna_engine
 from langchain_google_genai import ChatGoogleGenerativeAI  # Still need this for Educhain LLMConfig
 import os
 import json
-
+import tempfile
 
 
 # --- Configuration ---
@@ -140,27 +140,33 @@ def authenticate_google_api():
 
     if not creds or creds.invalid:
         try:
-            flow = client.flow_from_clientsecrets(
-                    {
-                         "installed": {
-                            "client_id": CLIENT_ID,
-                            "project_id": PROJECT_ID,
-                            "auth_uri": AUTH_URI,
-                            "token_uri": TOKEN_URI,
-                            "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_CERT_URL,
-                            "client_secret": CLIENT_SECRET,
-                            "redirect_uris": REDIRECT_URIS
-                            }
-                    }, SCOPES)
+            # Create a temporary file
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmpfile:
+                json.dump({"installed": {
+                        "client_id": CLIENT_ID,
+                        "project_id": PROJECT_ID,
+                        "auth_uri": AUTH_URI,
+                        "token_uri": TOKEN_URI,
+                        "auth_provider_x509_cert_url": AUTH_PROVIDER_X509_CERT_URL,
+                        "client_secret": CLIENT_SECRET,
+                        "redirect_uris": REDIRECT_URIS
+                    }}, tmpfile)
+                temp_file_path = tmpfile.name  # Get the path to the temp file
+
+            # Pass the temporary file path to flow_from_clientsecrets
+            flow = client.flow_from_clientsecrets(temp_file_path, SCOPES)
+
+            # Clean up the temporary file
+            os.remove(temp_file_path)
+
             creds = tools.run_flow(flow, store)
             return creds  # Return credentials
 
         except Exception as e:
-            st.error(f"Authentication error: {e}.  Ensure config.json is correct and accessible.")
+            st.error(f"Authentication error: {e}. {type(e).__name__} - {str(e)}")
             return None  # Authentication failed
     else:
         return creds
-
 def create_form_with_questions(creds, form_title, questions):
     """
     Creates a new Google Form with the given title and adds the provided questions.
