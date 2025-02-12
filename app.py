@@ -23,45 +23,17 @@ FORM_TITLE = "AI Generated Quiz"
 topic_schema = {'type': 'STRING', 'description': 'The topic for generating questions (e.g., Science, History).'}
 num_questions_schema = {'type': 'INTEGER', 'description': 'The number of questions to generate.'}
 custom_instructions_schema = {'type': 'STRING', 'description': 'Optional instructions for question generation.'}
+question_type_schema = {'type': 'STRING', 'enum': ['Multiple Choice', 'Short Answer', 'True/False', 'Fill in the Blank'], 'description': 'The type of questions to generate.'}
 
-mcq_params_schema = {
+question_params_schema = {
     'type': 'OBJECT',
     'properties': {
         'topic': topic_schema,
         'num_questions': num_questions_schema,
         'custom_instructions': custom_instructions_schema,
+        'question_type': question_type_schema,
     },
-    'required': ['topic', 'num_questions']
-}
-
-short_answer_params_schema = {
-    'type': 'OBJECT',
-    'properties': {
-        'topic': topic_schema,
-        'num_questions': num_questions_schema,
-        'custom_instructions': custom_instructions_schema,
-    },
-    'required': ['topic', 'num_questions']
-}
-
-true_false_params_schema = {
-    'type': 'OBJECT',
-    'properties': {
-        'topic': topic_schema,
-        'num_questions': num_questions_schema,
-        'custom_instructions': custom_instructions_schema,
-    },
-    'required': ['topic', 'num_questions']
-}
-
-fill_blank_params_schema = {
-    'type': 'OBJECT',
-    'properties': {
-        'topic': topic_schema,
-        'num_questions': num_questions_schema,
-        'custom_instructions': custom_instructions_schema,
-    },
-    'required': ['topic', 'num_questions']
+    'required': ['topic', 'num_questions', 'question_type']
 }
 
 generate_form_params_schema = {
@@ -78,24 +50,9 @@ generate_form_params_schema = {
 # Define FunctionDeclarations using dictionaries directly
 function_declarations = [
     {
-        'name': 'generate_mcq',
-        'description': 'Generate multiple choice questions on a given topic.',
-        'parameters': mcq_params_schema,
-    },
-    {
-        'name': 'generate_short_answer',
-        'description': 'Generate short answer questions on a given topic.',
-        'parameters': short_answer_params_schema,
-    },
-    {
-        'name': 'generate_true_false',
-        'description': 'Generate true/false questions on a given topic.',
-        'parameters': true_false_params_schema,
-    },
-    {
-        'name': 'generate_fill_blank',
-        'description': 'Generate fill in the blank questions on a given topic.',
-        'parameters': fill_blank_params_schema,
+        'name': 'generate_questions',
+        'description': 'Generate questions on a given topic and type.',
+        'parameters': question_params_schema,
     },
     {
         'name': 'generate_form',  # New Function
@@ -127,13 +84,35 @@ def authenticate_google_api():
 
     if not creds or creds.invalid:
         try:
+             # Load secrets from Streamlit Secrets (as JSON string)
+            client_secrets_json = st.secrets["google_client_secrets"]
+
+            # Check if the string is not empty
+            if not client_secrets_json:
+                st.error("The google_client_secrets secret is empty.  Please configure your secrets.")
+                return None
+
+            # Attempt to parse the JSON
+            try:
+                config_data = json.loads(client_secrets_json)
+            except json.JSONDecodeError as e:
+                st.error(f"Invalid JSON format in google_client_secrets. Please ensure valid JSON. Error: {e}")
+                return None
+
+             # Save the config_data to a local file, so that the oauth2client library could use it.
+            with open(CREDENTIALS_FILE, 'w') as f:
+                json.dump(config_data, f)
+
             flow = client.flow_from_clientsecrets(CREDENTIALS_FILE, SCOPES)
             creds = tools.run_flow(flow, store)
             return creds  # Return credentials
 
+        except KeyError:
+            st.error("Google Client Secrets not found in Streamlit Secrets.  Please configure your secrets.")
+            return None
         except Exception as e:
             st.error(f"Authentication error: {e}.  Ensure config.json is correct and accessible.")
-            return None  # Authentication failed
+            return None
     else:
         return creds
 
