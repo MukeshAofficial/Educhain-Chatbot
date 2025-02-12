@@ -48,16 +48,6 @@ mcq_params_schema = {
     'required': ['topic', 'num_questions']
 }
 
-short_answer_params_schema = {
-    'type': 'OBJECT',
-    'properties': {
-        'topic': topic_schema,
-        'num_questions': num_questions_schema,
-        'custom_instructions': custom_instructions_schema,
-    },
-    'required': ['topic', 'num_questions']
-}
-
 true_false_params_schema = {
     'type': 'OBJECT',
     'properties': {
@@ -68,15 +58,6 @@ true_false_params_schema = {
     'required': ['topic', 'num_questions']
 }
 
-fill_blank_params_schema = {
-    'type': 'OBJECT',
-    'properties': {
-        'topic': topic_schema,
-        'num_questions': num_questions_schema,
-        'custom_instructions': custom_instructions_schema,
-    },
-    'required': ['topic', 'num_questions']
-}
 
 generate_form_params_schema = {
     'type': 'OBJECT',
@@ -96,19 +77,9 @@ function_declarations = [
         'parameters': mcq_params_schema,
     },
     {
-        'name': 'generate_short_answer',
-        'description': 'Generate short answer questions on a given topic.',
-        'parameters': short_answer_params_schema,
-    },
-    {
         'name': 'generate_true_false',
         'description': 'Generate true/false questions on a given topic.',
         'parameters': true_false_params_schema,
-    },
-    {
-        'name': 'generate_fill_blank',
-        'description': 'Generate fill in the blank questions on a given topic.',
-        'parameters': fill_blank_params_schema,
     },
     {
         'name': 'generate_form',  # New Function
@@ -254,7 +225,6 @@ def create_form_with_questions(creds, form_title, questions):
 
         st.success("Google Form created successfully!")
         form_url = f"https://docs.google.com/forms/d/{form_id}/viewform"
-        st.markdown(f"Form URL: [Click here]({form_url})")
         return form_url
 
     except Exception as e:
@@ -274,17 +244,6 @@ def generate_mcq(qna_engine_instance, topic, num_questions, custom_instructions=
     )
     return questions
 
-def generate_short_answer(qna_engine_instance, topic, num_questions, custom_instructions=None):
-    """Generates and displays Short Answer Questions."""
-    st.info(f"Generating {num_questions} Short Answer Questions on topic: {topic}...")  # Added info message
-    questions = qna_engine_instance.generate_questions(
-        topic=topic,
-        num=num_questions,
-        question_type="Short Answer",
-        custom_instructions=custom_instructions
-    )
-    return questions
-
 def generate_true_false(qna_engine_instance, topic, num_questions, custom_instructions=None):
     """Generates and displays True/False Questions."""
     st.info(f"Generating {num_questions} True/False Questions on topic: {topic}...")  # Added info message
@@ -292,17 +251,6 @@ def generate_true_false(qna_engine_instance, topic, num_questions, custom_instru
         topic=topic,
         num=num_questions,
         question_type="True/False",
-        custom_instructions=custom_instructions
-    )
-    return questions
-
-def generate_fill_blank(qna_engine_instance, topic, num_questions, custom_instructions=None):
-    """Generates and displays Fill in the Blank Questions."""
-    st.info(f"Generating {num_questions} Fill in the Blank Questions on topic: {topic}...")  # Added info message
-    questions = qna_engine_instance.generate_questions(
-        topic=topic,
-        num=num_questions,
-        question_type="Fill in the Blank",
         custom_instructions=custom_instructions
     )
     return questions
@@ -324,7 +272,7 @@ def generate_form(qna_engine_instance, topic, num_questions, custom_instructions
             form_url = create_form_with_questions(creds, FORM_TITLE, questions)  # Call form creation
             return form_url #Returns form
         else:
-            st.error("Google Forms authentication failed.")#if for some reason, creds does not exits (it's an error)
+            st.error("Google Forms authentication failed.") #if for some reason, creds does not exits (it's an error)
             return None #Returns None
 
     else:
@@ -357,9 +305,7 @@ def display_questions(questions):
 # --- Function Dispatcher ---
 function_map = {
     "generate_mcq": generate_mcq,
-    "generate_short_answer": generate_short_answer,
     "generate_true_false": generate_true_false,
-    "generate_fill_blank": generate_fill_blank,
     "generate_form": generate_form  # New Function
 }
 
@@ -378,7 +324,6 @@ def main():
     model_options = {
         "gemini-2.0-flash": "gemini-2.0-flash",
         "gemini-2.0-flash-lite-preview-02-05": "gemini-2.0-flash-lite-preview-02-05",
-        "gemini-2.0-pro-exp-02-05": "gemini-2.0-pro-exp-02-05",
     }
     model_name = st.selectbox("Select Model", options=list(model_options.keys()), format_func=lambda x: model_options[x])
 
@@ -405,12 +350,20 @@ def main():
         auth_url = authenticate_google_api() #Added. calls the authentication to get an URL
 
         if auth_url: #Added # if the call is true and generates an URL, show on screen the URL to connect
-            st.info(f"Please authenticate with Google: {auth_url}") #Added.
-            #Clear URL for the page so it's not an endless loop.
-            st.query_params.clear() #Added
-            st.stop() #Added. break
+
+            st.session_state["auth_url"] = auth_url #Added.Save link.
         else: #added. If does not create the URL show the error,
             st.error("Not able to generate the authentication. Please, try again.") #Added.
+            st.stop()
+    auth_url =  st.session_state.get("auth_url")
+    if auth_url:
+
+        st.markdown(f"Please login [here]({auth_url})")
+        #Clear URL for the page so it's not an endless loop.
+        st.query_params.clear() #Added
+        st.session_state.pop("auth_url", None)
+        st.stop() #Added. break
+
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -447,11 +400,8 @@ def main():
                             function_result = question_generation_function(qna_engine_instance, **arguments) #Added
 
                             if function_result: #Added. If not authenticated it shows a URL. If authenticated it will show form URL
-                                if "http" in function_result: #Added. Authentication or form url. If auth then:
-                                    st.markdown(f"Please authenticate with Google: {function_result}") #Added.
 
-                                else:
-                                    st.markdown(f"Form created: {function_result}")#Added #if for is created it show this.
+                                st.markdown(f"Form created: {function_result}")#Added #if for is created it show this.
 
                             else:
                                 st.error("Error occured. Not able to create question/authenticate") # Added if is not able to create questions/authenticate
